@@ -281,7 +281,6 @@ static inline void serializeEvolutionary(const Context& context, const Hypergrap
   oss << "RESULT "
       << "connectivity=" << metrics::km1(hg)
       << " action=" << context.evolutionary.action.decision()
-      << " time-total=" << Timer::instance().evolutionaryResult().total_evolutionary
       << " iteration=" << context.evolutionary.iteration
       << " replace-strategy=" << context.evolutionary.replace_strategy
       << " combine-strategy=" << combine_strat

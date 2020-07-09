@@ -270,8 +270,8 @@ inline std::vector<ClusterID> detectCommunities(const Hypergraph& hypergraph,
   const EdgeWeight quality = louvain.run();
   HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed_seconds = end - start;
-  Timer::instance().add(context, Timepoint::pre_community_detection,
-                        std::chrono::duration<double>(end - start).count());
+//  Timer::instance().add(context, Timepoint::pre_community_detection,
+//                        std::chrono::duration<double>(end - start).count());
   if (context.type == ContextType::main) {
     context.stats.set(StatTag::Preprocessing, "Communities", louvain.numCommunities());
     context.stats.set(StatTag::Preprocessing, "Modularity", quality);

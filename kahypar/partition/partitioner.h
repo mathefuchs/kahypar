@@ -229,12 +229,7 @@ inline void Partitioner::preprocess(Hypergraph& hypergraph, Hypergraph& sparse_h
                                     const Context& context) {
   ASSERT(context.preprocessing.enable_min_hash_sparsifier);
 
-  const HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
   sparse_hypergraph = _pin_sparsifier.buildSparsifiedHypergraph(hypergraph, context);
-  const HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-
-  Timer::instance().add(context, Timepoint::pre_sparsifier,
-                        std::chrono::duration<double>(end - start).count());
 
   if (context.partition.verbose_output) {
     LOG << "Performing sparsification::";
@@ -252,11 +247,7 @@ inline void Partitioner::postprocess(Hypergraph& hypergraph) {
 inline void Partitioner::postprocess(Hypergraph& hypergraph, Hypergraph& sparse_hypergraph,
                                      const Context& context) {
   ASSERT(context.preprocessing.enable_min_hash_sparsifier);
-  const HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
   _pin_sparsifier.applyPartition(sparse_hypergraph, hypergraph);
-  const HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-  Timer::instance().add(context, Timepoint::post_sparsifier_restore,
-                        std::chrono::duration<double>(end - start).count());
   postprocess(hypergraph);
 }
 

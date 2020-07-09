@@ -41,11 +41,7 @@ static inline void partition(Hypergraph& hypergraph,
                              const Context& context) {
   io::printCoarseningBanner(context);
 
-  HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
   coarsener.coarsen(context.coarsening.contraction_limit);
-  HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-  Timer::instance().add(context, Timepoint::coarsening,
-                        std::chrono::duration<double>(end - start).count());
 
   if (context.partition.verbose_output && context.type == ContextType::main) {
     io::printHypergraphInfo(hypergraph, "Coarsened Hypergraph");
@@ -57,11 +53,7 @@ static inline void partition(Hypergraph& hypergraph,
     }
     io::printInitialPartitioningBanner(context);
 
-    start = std::chrono::high_resolution_clock::now();
     initial::partition(hypergraph, context);
-    end = std::chrono::high_resolution_clock::now();
-    Timer::instance().add(context, Timepoint::initial_partitioning,
-                          std::chrono::duration<double>(end - start).count());
 
     hypergraph.initializeNumCutHyperedges();
     if (context.partition.verbose_output && context.type == ContextType::main) {
@@ -115,12 +107,7 @@ static inline void partition(Hypergraph& hypergraph,
     io::printLocalSearchBanner(context);
   }
 
-  start = std::chrono::high_resolution_clock::now();
   coarsener.uncoarsen(refiner);
-  end = std::chrono::high_resolution_clock::now();
-
-  Timer::instance().add(context, Timepoint::local_search,
-                        std::chrono::duration<double>(end - start).count());
 
   io::printLocalSearchResults(context, hypergraph);
 }
