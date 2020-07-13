@@ -140,7 +140,7 @@ namespace kahypar {
                 if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
 
                     // Load per edge score if required
-                    const RatingType score = 0.0;
+                    RatingType score = 0.0;
                     if (!ScorePolicy::preload_edge_metrics) {
                         score = ScorePolicy::score(_hg, _context, he, u, -1, _pin_already_visited, _avg_deg,
                                                    _avg_node_weight, -1, 0);
