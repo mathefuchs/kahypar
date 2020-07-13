@@ -7,7 +7,11 @@
 *.h~
 *.py~
 *.cfg~
-build/*
+
+build/
+cmake-build-debug/
+cmake-build-release/
+
 rel2/*
 release127/*
 release128/*
