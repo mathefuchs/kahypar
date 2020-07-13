@@ -39,129 +39,195 @@
 #include "kahypar/partition/context.h"
 
 namespace kahypar {
-template <class ScorePolicy = HeavyEdgeScore,
-          class HeavyNodePenaltyPolicy = MultiplicativePenalty,
-          class CommunityPolicy = UseCommunityStructure,
-          class RatingPartitionPolicy = NormalPartitionPolicy,
-          class AcceptancePolicy = BestRatingWithTieBreaking<>,
-          class FixedVertexPolicy = AllowFreeOnFixedFreeOnFreeFixedOnFixed,
-          typename RatingType = RatingType>
-class VertexPairRater {
- private:
-  static constexpr bool debug = false;
+    template<class ScorePolicy = HeavyEdgeScore,
+            class HeavyNodePenaltyPolicy = MultiplicativePenalty,
+            class CommunityPolicy = UseCommunityStructure,
+            class RatingPartitionPolicy = NormalPartitionPolicy,
+            class AcceptancePolicy = BestRatingWithTieBreaking<>,
+            class FixedVertexPolicy = AllowFreeOnFixedFreeOnFreeFixedOnFixed,
+            typename RatingType = RatingType>
+    class VertexPairRater {
+    private:
+        static constexpr bool debug = false;
 
-  class VertexPairRating {
- public:
-    VertexPairRating(HypernodeID trgt, RatingType val, bool is_valid) :
-      target(trgt),
-      value(val),
-      valid(is_valid) { }
+        class VertexPairRating {
+        public:
+            VertexPairRating(HypernodeID trgt, RatingType val, bool is_valid) :
+                    target(trgt), value(val), valid(is_valid) {
+            }
 
-    VertexPairRating() :
-      target(std::numeric_limits<HypernodeID>::max()),
-      value(std::numeric_limits<RatingType>::min()),
-      valid(false) { }
+            VertexPairRating() :
+                    target(std::numeric_limits<HypernodeID>::max()),
+                    value(std::numeric_limits<RatingType>::min()),
+                    valid(false) {}
 
-    VertexPairRating(const VertexPairRating&) = delete;
-    VertexPairRating& operator= (const VertexPairRating&) = delete;
+            VertexPairRating(const VertexPairRating &) = delete;
 
-    VertexPairRating(VertexPairRating&&) = default;
-    VertexPairRating& operator= (VertexPairRating&&) = delete;
+            VertexPairRating &operator=(const VertexPairRating &) = delete;
 
-    ~VertexPairRating() = default;
+            VertexPairRating(VertexPairRating &&) = default;
 
-    HypernodeID target;
-    RatingType value;
-    bool valid;
-  };
+            VertexPairRating &operator=(VertexPairRating &&) = delete;
 
- public:
-  using Rating = VertexPairRating;
+            ~VertexPairRating() = default;
 
-  VertexPairRater(Hypergraph& hypergraph, const Context& context) :
-    _hg(hypergraph),
-    _context(context),
-    _tmp_ratings(_hg.initialNumNodes()),
-    _already_matched(_hg.initialNumNodes()) { }
+            HypernodeID target;
+            RatingType value;
+            bool valid;
+        };
 
-  VertexPairRater(const VertexPairRater&) = delete;
-  VertexPairRater& operator= (const VertexPairRater&) = delete;
+    public:
+        using Rating = VertexPairRating;
 
-  VertexPairRater(VertexPairRater&&) = delete;
-  VertexPairRater& operator= (VertexPairRater&&) = delete;
+        VertexPairRater(Hypergraph &hypergraph, const Context &context) :
+                _hg(hypergraph),
+                _context(context),
+                _tmp_ratings(_hg.initialNumNodes()),
+                _tmp_num_common_incident_nets(_hg.initialNumNodes()),
+                _already_matched(_hg.initialNumNodes()),
+                _pin_already_visited(ScorePolicy::requires_flag_array ? hypergraph.initialNumNodes() : 1),
+                _pin_already_visited_for_calc(hypergraph.initialNumNodes()),
+                _avg_deg(0), _avg_node_weight(0) {
 
-  ~VertexPairRater() = default;
-
-  VertexPairRating rate(const HypernodeID u) {
-    DBG << "Calculating rating for HN" << u;
-    const HypernodeWeight weight_u = _hg.nodeWeight(u);
-    for (const HyperedgeID& he : _hg.incidentEdges(u)) {
-      ASSERT(_hg.edgeSize(he) > 1, V(he));
-      if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
-        const RatingType score = ScorePolicy::score(_hg, he, _context);
-        for (const HypernodeID& v : _hg.pins(he)) {
-          if (v != u && belowThresholdNodeWeight(weight_u, _hg.nodeWeight(v)) &&
-              RatingPartitionPolicy::accept(_hg, _context, u, v)) {
-            _tmp_ratings[v] += score;
-          }
+            if (ScorePolicy::requires_additional_fields) {
+                HyperedgeID sumDeg = 0;
+                HypernodeWeight sumWeight = 0;
+                for (const auto node : hypergraph.nodes()) {
+                    sumDeg += hypergraph.nodeDegree(node);
+                    sumWeight += hypergraph.nodeWeight(node);
+                }
+                _avg_deg = static_cast<RatingType>(sumDeg) / static_cast<RatingType>(hypergraph.currentNumNodes());
+                _avg_node_weight =
+                        static_cast<RatingType>(sumWeight) / static_cast<RatingType>(hypergraph.currentNumNodes());
+            }
         }
-      }
-    }
 
-    RatingType max_rating = std::numeric_limits<RatingType>::min();
-    HypernodeID target = std::numeric_limits<HypernodeID>::max();
-    for (auto it = _tmp_ratings.end() - 1; it >= _tmp_ratings.begin(); --it) {
-      const HypernodeID tmp_target = it->key;
-      const HypernodeWeight target_weight = _hg.nodeWeight(tmp_target);
-      HypernodeWeight penalty = HeavyNodePenaltyPolicy::penalty(weight_u,
-                                                                target_weight);
-      penalty = penalty == 0 ? std::max(std::max(weight_u, target_weight), 1) : penalty;
-      const RatingType tmp_rating = it->value / static_cast<double>(penalty);
-      DBG << "r(" << u << "," << tmp_target << ")=" << tmp_rating;
-      if (CommunityPolicy::sameCommunity(_hg.communities(), u, tmp_target) &&
-          AcceptancePolicy::acceptRating(tmp_rating, max_rating,
-                                         target, tmp_target, _already_matched) &&
-          FixedVertexPolicy::acceptContraction(_hg, _context, u, tmp_target)) {
-        max_rating = tmp_rating;
-        target = tmp_target;
-      }
-    }
+        VertexPairRater(const VertexPairRater &) = delete;
 
-    VertexPairRating ret;
-    if (max_rating != std::numeric_limits<RatingType>::min()) {
-      ASSERT(target != std::numeric_limits<HypernodeID>::max(), "invalid contraction target");
-      ret.value = max_rating;
-      ret.target = target;
-      ret.valid = true;
-      ASSERT(_hg.communities()[u] == _hg.communities()[ret.target]);
-    }
-    ASSERT(!ret.valid || (_hg.partID(u) == _hg.partID(ret.target)));
-    _tmp_ratings.clear();
-    DBG << "rating=(" << ret.value << "," << ret.target << "," << ret.valid << ")";
-    return ret;
-  }
+        VertexPairRater &operator=(const VertexPairRater &) = delete;
 
-  void markAsMatched(const HypernodeID hn) {
-    _already_matched.set(hn, true);
-  }
+        VertexPairRater(VertexPairRater &&) = delete;
 
-  void resetMatches() {
-    _already_matched.reset();
-  }
+        VertexPairRater &operator=(VertexPairRater &&) = delete;
 
-  HypernodeWeight thresholdNodeWeight() const {
-    return _context.coarsening.max_allowed_node_weight;
-  }
+        ~VertexPairRater() = default;
 
- private:
-  bool belowThresholdNodeWeight(const HypernodeWeight weight_u,
-                                const HypernodeWeight weight_v) const {
-    return weight_v + weight_u <= _context.coarsening.max_allowed_node_weight;
-  }
+        VertexPairRating rate(const HypernodeID u) {
+            DBG << "Calculating rating for HN" << u;
+            _pin_already_visited_for_calc.reset();
+            const HypernodeWeight weight_u = _hg.nodeWeight(u);
 
-  Hypergraph& _hg;
-  const Context& _context;
-  ds::SparseMap<HypernodeID, RatingType> _tmp_ratings;
-  ds::FastResetFlagArray<> _already_matched;
-};
+            // Preload heavy edge score if necessary
+            if (ScorePolicy::preload_edge_metrics) {
+                for (const HyperedgeID &he : _hg.incidentEdges(u)) {
+                    ASSERT(_hg.edgeSize(he) > 1, V(he));
+                    if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
+                        const RatingType score = HeavyEdgeScore::calculate_rating(_hg, he);
+                        for (const HypernodeID &v : _hg.pins(he)) {
+                            if (v != u && belowThresholdNodeWeight(weight_u, _hg.nodeWeight(v)) &&
+                                RatingPartitionPolicy::accept(_hg, _context, u, v)) {
+                                _tmp_ratings[v] += score;
+                                ++_tmp_num_common_incident_nets[v];
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Process edge metrics and score node pairs
+            for (const HyperedgeID &he : _hg.incidentEdges(u)) {
+                ASSERT(_hg.edgeSize(he) > 1, V(he));
+                if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
+
+                    // Load per edge score if required
+                    const RatingType score = 0.0;
+                    if (!ScorePolicy::preload_edge_metrics) {
+                        score = ScorePolicy::score(_hg, _context, he, u, -1, _pin_already_visited, _avg_deg,
+                                                   _avg_node_weight, -1, 0);
+                    }
+
+                    for (const HypernodeID &v : _hg.pins(he)) {
+                        if (v != u && !_pin_already_visited_for_calc[v] &&
+                            belowThresholdNodeWeight(weight_u, _hg.nodeWeight(v)) &&
+                            RatingPartitionPolicy::accept(_hg, _context, u, v)) {
+
+                            // Whether to use per edge or per node scoring
+                            if (ScorePolicy::preload_edge_metrics) {
+                                _pin_already_visited_for_calc.set(v, true);
+                                _tmp_ratings[v] = ScorePolicy::score(
+                                        _hg, _context, he, u, v, _pin_already_visited, _avg_deg, _avg_node_weight,
+                                        _tmp_ratings[v], _tmp_num_common_incident_nets[v]);
+                            } else {
+                                _tmp_ratings[v] += score;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Find max rating
+            RatingType max_rating = std::numeric_limits<RatingType>::min();
+            HypernodeID target = std::numeric_limits<HypernodeID>::max();
+            for (auto it = _tmp_ratings.end() - 1; it >= _tmp_ratings.begin(); --it) {
+                const HypernodeID tmp_target = it->key;
+                const HypernodeWeight target_weight = _hg.nodeWeight(tmp_target);
+                HypernodeWeight penalty = HeavyNodePenaltyPolicy::penalty(weight_u,
+                                                                          target_weight);
+                penalty = penalty == 0 ? std::max(std::max(weight_u, target_weight), 1) : penalty;
+                const RatingType tmp_rating = it->value / static_cast<double>(penalty);
+                DBG << "r(" << u << "," << tmp_target << ")=" << tmp_rating;
+                if (CommunityPolicy::sameCommunity(_hg.communities(), u, tmp_target) &&
+                    AcceptancePolicy::acceptRating(tmp_rating, max_rating,
+                                                   target, tmp_target, _already_matched) &&
+                    FixedVertexPolicy::acceptContraction(_hg, _context, u, tmp_target)) {
+                    max_rating = tmp_rating;
+                    target = tmp_target;
+                }
+            }
+
+            // Return max rating if available
+            VertexPairRating ret;
+            if (max_rating != std::numeric_limits<RatingType>::min()) {
+                ASSERT(target != std::numeric_limits<HypernodeID>::max(), "invalid contraction target");
+                ret.value = max_rating;
+                ret.target = target;
+                ret.valid = true;
+                ASSERT(_hg.communities()[u] == _hg.communities()[ret.target]);
+            }
+            ASSERT(!ret.valid || (_hg.partID(u) == _hg.partID(ret.target)));
+            _tmp_ratings.clear();
+            _tmp_num_common_incident_nets.clear();
+            DBG << "rating=(" << ret.value << "," << ret.target << "," << ret.valid << ")";
+            return ret;
+        }
+
+        void markAsMatched(const HypernodeID hn) {
+            _already_matched.set(hn, true);
+        }
+
+        void resetMatches() {
+            _already_matched.reset();
+        }
+
+        HypernodeWeight thresholdNodeWeight() const {
+            return _context.coarsening.max_allowed_node_weight;
+        }
+
+    private:
+        bool belowThresholdNodeWeight(const HypernodeWeight weight_u,
+                                      const HypernodeWeight weight_v) const {
+            return weight_v + weight_u <= _context.coarsening.max_allowed_node_weight;
+        }
+
+        Hypergraph &_hg;
+        const Context &_context;
+        ds::SparseMap<HypernodeID, RatingType> _tmp_ratings;
+        ds::SparseMap<HypernodeID, size_t> _tmp_num_common_incident_nets;
+        ds::FastResetFlagArray<> _already_matched;
+        ds::FastResetFlagArray<> _pin_already_visited;
+        ds::FastResetFlagArray<> _pin_already_visited_for_calc;
+        ds::FastResetFlagArray<> _edge_already_visited;
+        RatingType _avg_deg;
+        RatingType _avg_node_weight;
+    };
 }  // namespace kahypar

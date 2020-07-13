@@ -65,6 +65,10 @@ REGISTER_POLICY(RatingFunction, RatingFunction::heavy_edge,
                 HeavyEdgeScore);
 REGISTER_POLICY(RatingFunction, RatingFunction::edge_frequency,
                 EdgeFrequencyScore);
+REGISTER_POLICY(RatingFunction, RatingFunction::combined_metric,
+                CombinedMetricScore);
+REGISTER_POLICY(RatingFunction, RatingFunction::simple_combined_metric,
+                SimpleCombinedMetricScore);
 
 using BestWithTieBreaking = BestRatingWithTieBreaking<>;
 using BestPreferringUnmatched = BestRatingPreferringUnmatched<>;

@@ -150,6 +150,9 @@ struct CoarseningParameters {
   HypernodeWeight max_allowed_node_weight = 0;
   HypernodeID contraction_limit = 0;
   double hypernode_weight_fraction = 0.0;
+
+  // Dynamic parameters for combined metrics coarsening
+
 };
 
 inline std::ostream& operator<< (std::ostream& str, const CoarseningParameters& params) {

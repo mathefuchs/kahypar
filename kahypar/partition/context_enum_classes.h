@@ -44,6 +44,8 @@ enum class InitialPartitioningTechnique : uint8_t {
 enum class RatingFunction : uint8_t {
   heavy_edge,
   edge_frequency,
+  combined_metric,
+  simple_combined_metric,
   UNDEFINED
 };
 
@@ -287,6 +289,8 @@ static std::ostream& operator<< (std::ostream& os, const RatingFunction& func) {
   switch (func) {
     case RatingFunction::heavy_edge: return os << "heavy_edge";
     case RatingFunction::edge_frequency: return os << "edge_frequency";
+    case RatingFunction::combined_metric: return os << "combined_metric";
+    case RatingFunction::simple_combined_metric: return os << "simple_combined_metric";
     case RatingFunction::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -478,6 +482,10 @@ static RatingFunction ratingFunctionFromString(const std::string& function) {
     return RatingFunction::heavy_edge;
   } else if (function == "edge_frequency") {
     return RatingFunction::edge_frequency;
+  } else if (function == "combined_metric") {
+      return RatingFunction::combined_metric;
+  } else if (function == "simple_combined_metric") {
+      return RatingFunction::simple_combined_metric;
   }
   LOG << "No valid rating function for rating.";
   exit(0);

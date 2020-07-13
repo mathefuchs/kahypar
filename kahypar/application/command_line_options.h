@@ -229,7 +229,9 @@ po::options_description createCoarseningOptionsDescription(Context& context,
       }
     }),
     "Rating function used to calculate scores for vertex pairs:\n"
-    "- heavy_edge")
+    "- heavy_edge"
+    "- combined_metric"
+    "- simple_combined_metric")
     ((initial_partitioning ? "i-c-rating-use-communities" : "c-rating-use-communities"),
     po::value<bool>()->value_name("<bool>")->notifier(
       [&context, initial_partitioning](bool use_communities) {
