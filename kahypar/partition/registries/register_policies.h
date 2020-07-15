@@ -69,6 +69,16 @@ REGISTER_POLICY(RatingFunction, RatingFunction::combined_metric,
                 CombinedMetricScore);
 REGISTER_POLICY(RatingFunction, RatingFunction::simple_combined_metric,
                 SimpleCombinedMetricScore);
+REGISTER_POLICY(RatingFunction, RatingFunction::incident_pin_degree_average,
+                IncidentPinDegreeAverage);
+REGISTER_POLICY(RatingFunction, RatingFunction::neighborhood_degree_average,
+                NeighborhoodDegreeAverage);
+REGISTER_POLICY(RatingFunction, RatingFunction::chi_squared_degree,
+                ChiSquaredDegreeScore);
+REGISTER_POLICY(RatingFunction, RatingFunction::closeness_metric,
+                ClosenessMetricScore);
+REGISTER_POLICY(RatingFunction, RatingFunction::strawman_metric,
+                StrawmanMetricScore);
 
 using BestWithTieBreaking = BestRatingWithTieBreaking<>;
 using BestPreferringUnmatched = BestRatingPreferringUnmatched<>;

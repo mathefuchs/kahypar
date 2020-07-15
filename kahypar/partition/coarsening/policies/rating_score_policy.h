@@ -31,15 +31,16 @@
 namespace kahypar {
     class HeavyEdgeScore final : public meta::PolicyBase {
     public:
-        static constexpr bool preload_edge_metrics = true;
+        static constexpr bool preload_edge_metrics = false;
+        static constexpr bool per_edge_scoring = true;
         static constexpr bool requires_flag_array = false;
         static constexpr bool requires_additional_fields = false;
 
         KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
-                const Hypergraph &, const Context &, const HyperedgeID, const HypernodeID, const HypernodeID,
-                ds::FastResetFlagArray<> &, const RatingType, const RatingType, const RatingType heavy_edge,
+                const Hypergraph &hypergraph, const Context &, const HyperedgeID he, const HypernodeID,
+                const HypernodeID, ds::FastResetFlagArray<> &, const RatingType, const RatingType, const RatingType,
                 const size_t) {
-            return heavy_edge;
+            return calculate_rating(hypergraph, he);
         }
 
         KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType calculate_rating(
@@ -51,6 +52,7 @@ namespace kahypar {
     class EdgeFrequencyScore final : public meta::PolicyBase {
     public:
         static constexpr bool preload_edge_metrics = false;
+        static constexpr bool per_edge_scoring = true;
         static constexpr bool requires_flag_array = false;
         static constexpr bool requires_additional_fields = false;
 
@@ -63,9 +65,11 @@ namespace kahypar {
         }
     };
 
+    // Combines Feature 17, 20, 21, 22, 24
     class CombinedMetricScore final : public meta::PolicyBase {
     public:
         static constexpr bool preload_edge_metrics = true;
+        static constexpr bool per_edge_scoring = false;
         static constexpr bool requires_flag_array = true;
         static constexpr bool requires_additional_fields = true;
 
@@ -211,9 +215,11 @@ namespace kahypar {
         }
     };
 
+    // Combines Feature 17, 22, 24
     class SimpleCombinedMetricScore final : public meta::PolicyBase {
     public:
         static constexpr bool preload_edge_metrics = true;
+        static constexpr bool per_edge_scoring = false;
         static constexpr bool requires_flag_array = false;
         static constexpr bool requires_additional_fields = true;
 
@@ -312,5 +318,140 @@ namespace kahypar {
         }
     };
 
-    using RatingScorePolicies = meta::Typelist<HeavyEdgeScore, EdgeFrequencyScore, CombinedMetricScore, SimpleCombinedMetricScore>;
+    // Feature 17
+    class IncidentPinDegreeAverage final : public meta::PolicyBase {
+    public:
+        static constexpr bool preload_edge_metrics = false;
+        static constexpr bool per_edge_scoring = false;
+        static constexpr bool requires_flag_array = false;
+        static constexpr bool requires_additional_fields = false;
+
+        KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
+                const Hypergraph &hypergraph, const Context &context, const HyperedgeID, const HypernodeID u,
+                const HypernodeID v, ds::FastResetFlagArray<> &, const RatingType, const RatingType avg_node_weight,
+                const RatingType heavy_edge, const size_t common_incident_nets) {
+            return static_cast<RatingType>(hypergraph.nodeDegree(u) + hypergraph.nodeDegree(v)) / 2.0;
+        }
+    };
+
+    // Feature 20
+    class NeighborhoodDegreeAverage final : public meta::PolicyBase {
+    public:
+        static constexpr bool preload_edge_metrics = false;
+        static constexpr bool per_edge_scoring = false;
+        static constexpr bool requires_flag_array = true;
+        static constexpr bool requires_additional_fields = false;
+
+        KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
+                const Hypergraph &hypergraph, const Context &, const HyperedgeID, const HypernodeID u,
+                const HypernodeID v, ds::FastResetFlagArray<> &pinVisitedBefore, const RatingType, const RatingType,
+                const RatingType, const size_t) {
+            pinVisitedBefore.reset();
+            size_t countNeighbors = 0;
+            HyperedgeID sumNodeDegrees = 0;
+
+            for (const auto &incidentEdge : hypergraph.incidentEdges(u)) {
+                for (const auto &neighbor : hypergraph.pins(incidentEdge)) {
+                    if (!pinVisitedBefore[neighbor]) {
+                        pinVisitedBefore.set(neighbor, true);
+                        ++countNeighbors;
+                        sumNodeDegrees += hypergraph.nodeDegree(neighbor);
+                    }
+                }
+            }
+
+            for (const auto &incidentEdge : hypergraph.incidentEdges(v)) {
+                for (const auto &neighbor : hypergraph.pins(incidentEdge)) {
+                    if (!pinVisitedBefore[neighbor]) {
+                        pinVisitedBefore.set(neighbor, true);
+                        ++countNeighbors;
+                        sumNodeDegrees += hypergraph.nodeDegree(neighbor);
+                    }
+                }
+            }
+
+            return static_cast<RatingType>(sumNodeDegrees) / static_cast<RatingType>(countNeighbors);
+        }
+    };
+
+    // Feature 21
+    class ChiSquaredDegreeScore final : public meta::PolicyBase {
+    public:
+        static constexpr bool preload_edge_metrics = false;
+        static constexpr bool per_edge_scoring = false;
+        static constexpr bool requires_flag_array = true;
+        static constexpr bool requires_additional_fields = true;
+
+        KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
+                const Hypergraph &hypergraph, const Context &, const HyperedgeID, const HypernodeID u,
+                const HypernodeID v, ds::FastResetFlagArray<> &pinVisitedBefore, const RatingType avg_deg,
+                const RatingType, const RatingType, const size_t) {
+
+            pinVisitedBefore.reset();
+            RatingType sumChiSquared = 0.0;
+
+            for (const auto &incidentEdge : hypergraph.incidentEdges(u)) {
+                for (const auto &neighbor : hypergraph.pins(incidentEdge)) {
+                    if (!pinVisitedBefore[neighbor]) {
+                        pinVisitedBefore.set(neighbor, true);
+                        const auto sub_deg = static_cast<RatingType>(hypergraph.nodeDegree(neighbor) - avg_deg);
+                        sumChiSquared += (sub_deg * sub_deg) / static_cast<RatingType>(avg_deg);
+                    }
+                }
+            }
+
+            for (const auto &incidentEdge : hypergraph.incidentEdges(v)) {
+                for (const auto &neighbor : hypergraph.pins(incidentEdge)) {
+                    if (!pinVisitedBefore[neighbor]) {
+                        pinVisitedBefore.set(neighbor, true);
+                        const auto sub_deg = static_cast<RatingType>(hypergraph.nodeDegree(neighbor) - avg_deg);
+                        sumChiSquared += (sub_deg * sub_deg) / static_cast<RatingType>(avg_deg);
+                    }
+                }
+            }
+
+            return sumChiSquared;
+        }
+    };
+
+    // Feature 22
+    class ClosenessMetricScore final : public meta::PolicyBase {
+    public:
+        static constexpr bool preload_edge_metrics = true;
+        static constexpr bool per_edge_scoring = false;
+        static constexpr bool requires_flag_array = false;
+        static constexpr bool requires_additional_fields = true;
+
+        KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
+                const Hypergraph &hypergraph, const Context &, const HyperedgeID, const HypernodeID u,
+                const HypernodeID v, ds::FastResetFlagArray<> &, const RatingType, const RatingType avg_node_weight,
+                const RatingType, const size_t common_incident_nets) {
+            const auto min_deg = static_cast<RatingType>(std::min(hypergraph.nodeDegree(u), hypergraph.nodeDegree(v)));
+            return static_cast<RatingType>(common_incident_nets) / min_deg
+                   - static_cast<RatingType>(hypergraph.nodeWeight(u) + hypergraph.nodeWeight(v)) /
+                     static_cast<RatingType>(2 * avg_node_weight) + 1.0;
+        }
+    };
+
+    // Feature 24
+    class StrawmanMetricScore final : public meta::PolicyBase {
+    public:
+        static constexpr bool preload_edge_metrics = true;
+        static constexpr bool per_edge_scoring = false;
+        static constexpr bool requires_flag_array = false;
+        static constexpr bool requires_additional_fields = false;
+
+        KAHYPAR_ATTRIBUTE_ALWAYS_INLINE static inline RatingType score(
+                const Hypergraph &hypergraph, const Context &, const HyperedgeID, const HypernodeID u,
+                const HypernodeID v, ds::FastResetFlagArray<> &, const RatingType,
+                const RatingType, const RatingType heavy_edge, const size_t) {
+            return static_cast<RatingType>(heavy_edge) /
+                   static_cast<RatingType>((hypergraph.nodeDegree(u) - heavy_edge) *
+                                           (hypergraph.nodeDegree(v) - heavy_edge));
+        }
+    };
+
+    using RatingScorePolicies = meta::Typelist<HeavyEdgeScore, EdgeFrequencyScore, CombinedMetricScore,
+            SimpleCombinedMetricScore, IncidentPinDegreeAverage, NeighborhoodDegreeAverage, ChiSquaredDegreeScore,
+            ClosenessMetricScore, StrawmanMetricScore>;
 }  // namespace kahypar

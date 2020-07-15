@@ -46,6 +46,11 @@ enum class RatingFunction : uint8_t {
   edge_frequency,
   combined_metric,
   simple_combined_metric,
+  incident_pin_degree_average,
+  neighborhood_degree_average,
+  chi_squared_degree,
+  closeness_metric,
+  strawman_metric,
   UNDEFINED
 };
 
@@ -291,6 +296,11 @@ static std::ostream& operator<< (std::ostream& os, const RatingFunction& func) {
     case RatingFunction::edge_frequency: return os << "edge_frequency";
     case RatingFunction::combined_metric: return os << "combined_metric";
     case RatingFunction::simple_combined_metric: return os << "simple_combined_metric";
+    case RatingFunction::incident_pin_degree_average: return os << "incident_pin_degree_average";
+    case RatingFunction::neighborhood_degree_average: return os << "neighborhood_degree_average";
+    case RatingFunction::chi_squared_degree: return os << "chi_squared_degree";
+    case RatingFunction::closeness_metric: return os << "closeness_metric";
+    case RatingFunction::strawman_metric: return os << "strawman_metric";
     case RatingFunction::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -486,6 +496,16 @@ static RatingFunction ratingFunctionFromString(const std::string& function) {
       return RatingFunction::combined_metric;
   } else if (function == "simple_combined_metric") {
       return RatingFunction::simple_combined_metric;
+  } else if (function == "incident_pin_degree_average") {
+      return RatingFunction::incident_pin_degree_average;
+  } else if (function == "neighborhood_degree_average") {
+      return RatingFunction::neighborhood_degree_average;
+  } else if (function == "chi_squared_degree") {
+      return RatingFunction::chi_squared_degree;
+  } else if (function == "closeness_metric") {
+      return RatingFunction::closeness_metric;
+  } else if (function == "strawman_metric") {
+      return RatingFunction::strawman_metric;
   }
   LOG << "No valid rating function for rating.";
   exit(0);

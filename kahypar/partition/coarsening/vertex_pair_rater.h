@@ -141,7 +141,7 @@ namespace kahypar {
 
                     // Load per edge score if required
                     RatingType score = 0.0;
-                    if (!ScorePolicy::preload_edge_metrics) {
+                    if (ScorePolicy::per_edge_scoring) {
                         score = ScorePolicy::score(_hg, _context, he, u, -1, _pin_already_visited, _avg_deg,
                                                    _avg_node_weight, -1, 0);
                     }
@@ -152,13 +152,13 @@ namespace kahypar {
                             RatingPartitionPolicy::accept(_hg, _context, u, v)) {
 
                             // Whether to use per edge or per node scoring
-                            if (ScorePolicy::preload_edge_metrics) {
+                            if (ScorePolicy::per_edge_scoring) {
+                                _tmp_ratings[v] += score;
+                            } else {
                                 _pin_already_visited_for_calc.set(v, true);
                                 _tmp_ratings[v] = ScorePolicy::score(
                                         _hg, _context, he, u, v, _pin_already_visited, _avg_deg, _avg_node_weight,
                                         _tmp_ratings[v], _tmp_num_common_incident_nets[v]);
-                            } else {
-                                _tmp_ratings[v] += score;
                             }
                         }
                     }
