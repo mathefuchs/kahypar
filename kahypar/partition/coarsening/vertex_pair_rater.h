@@ -83,7 +83,7 @@ namespace kahypar {
                 _hg(hypergraph),
                 _context(context),
                 _tmp_ratings(_hg.initialNumNodes()),
-                _tmp_num_common_incident_nets(_hg.initialNumNodes()),
+                _tmp_common_incident_net_weight(_hg.initialNumNodes()),
                 _already_matched(_hg.initialNumNodes()),
                 _pin_already_visited(ScorePolicy::requires_flag_array ? hypergraph.initialNumNodes() : 1),
                 _pin_already_visited_for_calc(hypergraph.initialNumNodes()),
@@ -127,7 +127,7 @@ namespace kahypar {
                             if (v != u && belowThresholdNodeWeight(weight_u, _hg.nodeWeight(v)) &&
                                 RatingPartitionPolicy::accept(_hg, _context, u, v)) {
                                 _tmp_ratings[v] += score;
-                                ++_tmp_num_common_incident_nets[v];
+                                _tmp_common_incident_net_weight[v] += _hg.edgeWeight(he);
                             }
                         }
                     }
@@ -158,7 +158,7 @@ namespace kahypar {
                                 _pin_already_visited_for_calc.set(v, true);
                                 _tmp_ratings[v] = ScorePolicy::score(
                                         _hg, _context, he, u, v, _pin_already_visited, _avg_deg, _avg_node_weight,
-                                        _tmp_ratings[v], _tmp_num_common_incident_nets[v]);
+                                        _tmp_ratings[v], _tmp_common_incident_net_weight[v]);
                             }
                         }
                     }
@@ -196,7 +196,7 @@ namespace kahypar {
             }
             ASSERT(!ret.valid || (_hg.partID(u) == _hg.partID(ret.target)));
             _tmp_ratings.clear();
-            _tmp_num_common_incident_nets.clear();
+            _tmp_common_incident_net_weight.clear();
             DBG << "rating=(" << ret.value << "," << ret.target << "," << ret.valid << ")";
             return ret;
         }
@@ -222,11 +222,10 @@ namespace kahypar {
         Hypergraph &_hg;
         const Context &_context;
         ds::SparseMap<HypernodeID, RatingType> _tmp_ratings;
-        ds::SparseMap<HypernodeID, size_t> _tmp_num_common_incident_nets;
+        ds::SparseMap<HypernodeID, HyperedgeWeight> _tmp_common_incident_net_weight;
         ds::FastResetFlagArray<> _already_matched;
         ds::FastResetFlagArray<> _pin_already_visited;
         ds::FastResetFlagArray<> _pin_already_visited_for_calc;
-        ds::FastResetFlagArray<> _edge_already_visited;
         RatingType _avg_deg;
         RatingType _avg_node_weight;
     };

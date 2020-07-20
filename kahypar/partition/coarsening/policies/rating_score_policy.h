@@ -426,7 +426,8 @@ namespace kahypar {
                 const Hypergraph &hypergraph, const Context &, const HyperedgeID, const HypernodeID u,
                 const HypernodeID v, ds::FastResetFlagArray<> &, const RatingType, const RatingType avg_node_weight,
                 const RatingType, const size_t common_incident_nets) {
-            const auto min_deg = static_cast<RatingType>(std::min(hypergraph.nodeDegree(u), hypergraph.nodeDegree(v)));
+            const auto min_deg = static_cast<RatingType>(std::min(hypergraph.weightedDegree(u),
+                                                                  hypergraph.weightedDegree(v)));
             return static_cast<RatingType>(common_incident_nets) / min_deg
                    - static_cast<RatingType>(hypergraph.nodeWeight(u) + hypergraph.nodeWeight(v)) /
                      static_cast<RatingType>(2 * avg_node_weight) + 1.0;
@@ -446,8 +447,8 @@ namespace kahypar {
                 const HypernodeID v, ds::FastResetFlagArray<> &, const RatingType,
                 const RatingType, const RatingType heavy_edge, const size_t) {
             return static_cast<RatingType>(heavy_edge) /
-                   static_cast<RatingType>((hypergraph.nodeDegree(u) - heavy_edge) *
-                                           (hypergraph.nodeDegree(v) - heavy_edge));
+                   static_cast<RatingType>((hypergraph.weightedDegree(u) - heavy_edge) *
+                                           (hypergraph.weightedDegree(v) - heavy_edge));
         }
     };
 

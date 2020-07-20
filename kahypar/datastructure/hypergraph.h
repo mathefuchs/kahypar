@@ -142,6 +142,8 @@ class GenericHypergraph {
     HyperedgeID num_incident_cut_hes = 0;
     // ! State during local search: inactive/active/marked
     uint32_t state = 0;
+    // ! Keep track of weighted node degree
+    HyperedgeWeight weightedDegree = 0;
   };
 
   // ! A dummy data structure that is used in GenericHypergraph::changeNodePart
@@ -646,6 +648,12 @@ class GenericHypergraph {
            index_vector[static_cast<size_t>(i) + 1]; ++pin_index) {
         const HypernodeID pin = edge_vector[pin_index];
         hypernode(pin).incidentNets().push_back(i);
+
+        if (hyperedge_weights != nullptr) {
+          hypernode(pin).weightedDegree += hyperedge_weights[i];
+        } else {
+          hypernode(pin).weightedDegree += 1;
+        }
       }
     }
 
@@ -1032,6 +1040,7 @@ class GenericHypergraph {
         } else {
           std::swap(hypernode(memento.u).incidentNets()[incident_hes_it], hypernode(memento.u).incidentNets().back());
           hypernode(memento.u).incidentNets().pop_back();
+          hypernode(memento.u).weightedDegree -= hyperedge(he).weight();
           --incident_hes_it;
           --incident_hes_end;
           // Undo case 2 opeations (i.e. Entry of pin v in HE e was reused to store connection to u):
@@ -1120,6 +1129,7 @@ class GenericHypergraph {
         } else {
           std::swap(hypernode(memento.u).incidentNets()[incident_hes_it], hypernode(memento.u).incidentNets().back());
           hypernode(memento.u).incidentNets().pop_back();
+          hypernode(memento.u).weightedDegree -= hyperedge(he).weight();
           --incident_hes_it;
           --incident_hes_end;
           // Undo case 2 opeations (i.e. Entry of pin v in HE e was reused to store connection to u):
@@ -1362,6 +1372,7 @@ class GenericHypergraph {
              "HN" << pin << "is already connected to HE" << he);
       DBG << "re-adding pin" << pin << "to HE" << he;
       hypernode(pin).incidentNets().push_back(he);
+      hypernode(pin).weightedDegree += hyperedge(he).weight();
       if (partID(pin) != kInvalidPartition) {
         incrementPinCountInPart(he, partID(pin));
       }
@@ -1388,6 +1399,7 @@ class GenericHypergraph {
              "HN" << pin << "is already connected to HE" << he);
       DBG << "re-adding pin" << pin << "to HE" << he;
       hypernode(pin).incidentNets().push_back(he);
+      hypernode(pin).weightedDegree += hyperedge(he).weight();
       if (partID(pin) != kInvalidPartition) {
         incrementPinCountInPart(he, partID(pin));
       }
@@ -1508,6 +1520,11 @@ class GenericHypergraph {
   PartitionID partID(const HypernodeID u) const {
     ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
     return hypernode(u).part_id;
+  }
+
+  HyperedgeWeight weightedDegree(const HypernodeID u) const {
+    ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
+    return hypernode(u).weightedDegree;
   }
 
   PartitionID fixedVertexPartID(const HypernodeID u) const {
@@ -1980,6 +1997,7 @@ class GenericHypergraph {
     // the hypernode's point of view.
     _incidence_array[hyperedge(e).firstInvalidEntry() - 1] = u;
     hypernode(u).incidentNets().push_back(e);
+    hypernode(u).weightedDegree += hyperedge(e).weight();
   }
 
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void markIncidentNetsOf(const HypernodeID v) {
@@ -2033,6 +2051,7 @@ class GenericHypergraph {
     ASSERT(begin < hypernode(hn).incidentNets().end());
     swap(*begin, *last_entry);
     hypernode(hn).incidentNets().pop_back();
+    hypernode(hn).weightedDegree -= hyperedge(he).weight();
   }
 
 
@@ -2345,6 +2364,7 @@ reindex(const Hypergraph& hypergraph) {
   for (const HyperedgeID& he : reindexed_hypergraph->edges()) {
     for (const HypernodeID& pin : reindexed_hypergraph->pins(he)) {
       reindexed_hypergraph->hypernode(pin).incidentNets().push_back(he);
+      reindexed_hypergraph->hypernode(pin).weightedDegree += reindexed_hypergraph->hyperedge(he).weight();
     }
   }
 
@@ -2508,6 +2528,7 @@ static void setupInternalStructure(const Hypergraph& reference,
   for (const HyperedgeID& he : subhypergraph.edges()) {
     for (const HypernodeID& pin : subhypergraph.pins(he)) {
       subhypergraph.hypernode(pin).incidentNets().push_back(he);
+      subhypergraph.hypernode(pin).weightedDegree += subhypergraph.hyperedge(he).weight();
     }
   }
 
